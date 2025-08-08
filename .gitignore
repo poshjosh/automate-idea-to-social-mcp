@@ -1,0 +1,12 @@
+# custom
+git-ignore/
+
+# environments
+.env
+.env.test
+*.env
+*.env.test
+
+# node
+
+node_modules/

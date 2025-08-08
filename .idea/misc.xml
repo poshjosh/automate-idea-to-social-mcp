@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerWorkspaceConfiguration">
+    <option name="COMPILER_PROCESS_ADDITIONAL_VM_OPTIONS" value="-Xms1024m -Xmx8192g" />
+  </component>
+  <component name="MavenRunner">
+    <option name="vmOptions" value="-Xms2048 -Xmx8192" />
+  </component>
+</project>

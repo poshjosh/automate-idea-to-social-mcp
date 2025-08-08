@@ -1,0 +1,33 @@
+{
+  "name": "automate-idea-to-social-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for automating idea-to-social media content generation and publishing",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "dev": "tsc --watch",
+    "start": "node build/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "social-media",
+    "automation",
+    "content-generation",
+    "ai"
+  ],
+  "author": "Generated from automate-idea-to-social project",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0",
+    "zod": "^3.22.0",
+    "js-yaml": "^4.1.0",
+    "node-html-parser": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/js-yaml": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
