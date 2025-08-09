@@ -384,7 +384,7 @@ create_automation_task agents=["reddit", "twitter"] text_content="What's your fa
 
 If `validate_setup` fails:
 
-1. Check that `AIDEAS_PROJECT_PATH` is correctly set
+1. Check that `AIDEAS_PROJECT_DIR` is correctly set
 2. Ensure the automate-idea-to-social project is properly installed
 3. Verify Python dependencies are installed
 4. Check file permissions

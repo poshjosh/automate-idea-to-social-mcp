@@ -79,7 +79,7 @@ automate-idea-to-social-mcp/
       "command": "node",
       "args": ["/path/to/build/index.js"],
       "env": {
-        "AIDEAS_PROJECT_PATH": "/path/to/automate-idea-to-social"
+        "AIDEAS_PROJECT_DIR": "/path/to/automate-idea-to-social"
       }
     }
   }

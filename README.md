@@ -58,7 +58,7 @@ The server supports automation for the following social media platforms:
 
 The MCP server requires the following environment variable:
 
-- `AIDEAS_PROJECT_PATH`: Full path to the automate-idea-to-social project directory
+- `AIDEAS_PROJECT_DIR`: Full path to the automate-idea-to-social project directory
 
 ### MCP Settings Configuration
 
@@ -71,7 +71,7 @@ Add the server to your MCP settings file (`~/Library/Application Support/Code/Us
       "command": "node",
       "args": ["/Users/chinomso/dev_ai/automate-idea-to-social-mcp/build/index.js"],
       "env": {
-        "AIDEAS_PROJECT_PATH": "/Users/chinomso/dev_ai/automate-idea-to-social"
+        "AIDEAS_PROJECT_DIR": "/Users/chinomso/dev_ai/automate-idea-to-social"
       }
     }
   }
@@ -237,7 +237,7 @@ All errors are returned with descriptive messages to help with troubleshooting.
 
 ### Common Issues
 
-1. **"AIDEAS_PROJECT_PATH environment variable is required"**
+1. **"AIDEAS_PROJECT_DIR environment variable is required"**
    - Ensure the environment variable is set in the MCP configuration
    - Verify the path points to the correct project directory
 
