@@ -87,31 +87,9 @@ list_agents filter_by_tag="post"
 }
 ```
 
-## Content Creation Workflows
+## Content Publication Workflows
 
-### 3. Generate Content Ideas
-
-Generate ideas for a specific topic:
-
-```
-generate_content_ideas topic="artificial intelligence" platform="youtube" count=3
-```
-
-**Response:**
-```json
-{
-  "topic": "artificial intelligence",
-  "platform": "youtube",
-  "ideas": [
-    "How to master artificial intelligence in 2024",
-    "5 common mistakes people make with artificial intelligence",
-    "The ultimate guide to artificial intelligence"
-  ],
-  "count": 3
-}
-```
-
-### 4. Single Platform Publishing
+### 3. Single Platform Publishing
 
 Create a task to post content to Twitter:
 
@@ -132,7 +110,7 @@ text_title="AI Social Media Automation"
 }
 ```
 
-### 5. Multi-Platform Publishing
+### 4. Multi-Platform Publishing
 
 Create a comprehensive content publishing task:
 
@@ -156,7 +134,7 @@ language_codes="en,es,fr"
 
 ## Task Management
 
-### 6. Monitor Task Progress
+### 5. Monitor Task Progress
 
 Check the status of a specific task:
 
@@ -193,7 +171,7 @@ get_task_status task_id="task_1704123456789_abc123def"
 }
 ```
 
-### 7. List All Tasks
+### 6. List All Tasks
 
 View all tasks with their current status:
 
@@ -229,6 +207,22 @@ Filter by status:
 
 ```
 list_tasks status_filter="completed"
+```
+
+### 7. Get logs
+
+Get logs since the last task execution:
+
+```
+get_logs
+```
+
+**Response:**
+```json
+{
+  "logs": ["Log entry 0", "Log entry 1"],
+  "total": 2
+}
 ```
 
 ## Advanced Use Cases
@@ -345,12 +339,11 @@ get_task_status task_id="nonexistent-task"
 
 ### Content Planning Workflow
 
-1. **Generate Ideas**: Use `generate_content_ideas` to brainstorm topics
-2. **Validate Setup**: Run `validate_setup` before starting tasks
-3. **Check Agents**: Use `list_agents` to see available platforms
-4. **Create Tasks**: Use `create_automation_task` with appropriate agents
-5. **Monitor Progress**: Use `get_task_status` and `list_tasks` to track execution
-6. **Review Results**: Check task results for success/failure details
+1. **Validate Setup**: Run `validate_setup` before starting tasks
+2. **Check Agents**: Use `list_agents` to see available platforms
+3. **Create Tasks**: Use `create_automation_task` with appropriate agents
+4. **Monitor Progress**: Use `get_task_status` and `list_tasks` to track execution
+5. **Review Results**: Check task results for success/failure details
 
 ### Multi-Language Content
 

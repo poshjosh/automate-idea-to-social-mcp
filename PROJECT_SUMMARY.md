@@ -32,12 +32,7 @@ automate-idea-to-social-mcp/
 - `list_tasks`: Lists all tasks with status filtering
 - Asynchronous task execution with proper error handling
 
-### 3. **Content Generation**
-- `generate_content_ideas`: AI-powered content idea generation
-- Platform-specific content suggestions
-- Customizable topic and count parameters
-
-### 4. **System Validation**
+### 3. **System Validation**
 - `validate_setup`: Comprehensive system health checks
 - Validates Python environment, project structure, and dependencies
 - Provides actionable feedback for configuration issues
@@ -143,9 +138,8 @@ The MCP server is production-ready with:
 
 1. **Setup**: Configure environment variables and validate setup
 2. **Discovery**: List available agents and their capabilities
-3. **Planning**: Generate content ideas for target platforms
-4. **Execution**: Create automation tasks with specific agents
-5. **Monitoring**: Track task progress and handle results
+3. **Execution**: Create automation tasks with specific agents
+4. **Monitoring**: Track task progress and handle results
 
 ## Future Enhancements
 

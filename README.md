@@ -6,7 +6,6 @@ An MCP (Model Context Protocol) server that provides tools for automating conten
 
 - **Agent Management**: List and configure automation agents for different platforms
 - **Task Creation**: Create and manage automation tasks for content publishing
-- **Content Ideas**: Generate content ideas for various platforms and topics
 - **Status Monitoring**: Track the progress of automation tasks
 - **Setup Validation**: Validate that the underlying automation system is properly configured
 
@@ -84,7 +83,7 @@ Add the server to your MCP settings file (`~/Library/Application Support/Code/Us
 Lists all available automation agents.
 
 **Parameters:**
-- `filter_by_tag` (optional): Filter agents by tag (e.g., 'post', 'generate-video', 'test')
+- `filter_by_tag` (optional): Filter agents by tag (e.g., 'post', 'custom', 'test')
 
 **Example:**
 ```
@@ -141,20 +140,7 @@ Lists all tasks with optional filtering.
 List all completed tasks
 ```
 
-### 6. `generate_content_ideas`
-Generates content ideas for a given topic and platform.
-
-**Parameters:**
-- `topic`: Topic or theme for content ideas
-- `platform` (optional): Target platform (e.g., 'twitter', 'youtube', 'blog')
-- `count` (default: 5): Number of ideas to generate (1-10)
-
-**Example:**
-```
-Generate 5 content ideas about "machine learning" for YouTube
-```
-
-### 7. `validate_setup`
+### 6. `validate_setup`
 Validates that the automation system is properly configured.
 
 **Example:**
@@ -162,21 +148,27 @@ Validates that the automation system is properly configured.
 Validate the automation setup
 ```
 
+### 7. `get_logs`
+Get logs since the last call.
+
+**Parameters:**
+None
+
+**Example:**
+```
+Get the latest logs
+```
+
 ## Usage Examples
 
 ### Basic Content Publishing
 
-1. **Generate content ideas**:
-   ```
-   Generate 3 content ideas about "productivity tips" for Twitter
-   ```
-
-2. **Create an automation task**:
+1. **Create an automation task**:
    ```
    Create a task to post "5 productivity tips that changed my life: 1) Time blocking 2) Pomodoro technique 3) Digital minimalism 4) Morning routines 5) Single-tasking" to Twitter
    ```
 
-3. **Monitor task progress**:
+2. **Monitor task progress**:
    ```
    Check the status of the task
    ```
@@ -199,17 +191,12 @@ Create a task to post "The future of AI in education" to YouTube, Twitter, and b
    List all agents that can post content
    ```
 
-3. **Generate ideas**:
-   ```
-   Generate 5 content ideas about "sustainable living" for blog
-   ```
-
-4. **Create and execute task**:
+3. **Create and execute task**:
    ```
    Create a task to post one of the generated ideas to blog and social media
    ```
 
-5. **Monitor progress**:
+4. **Monitor progress**:
    ```
    List all running tasks
    ```
