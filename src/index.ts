@@ -22,10 +22,11 @@ import {
   createAndRunContainer,
   checkDockerStatus, stopAndRemoveContainer
 } from "./docker-utils.js";
-import {ApiClient, createApiClient} from "./api-client.js";
+import { ApiClient, createApiClient } from "./api-client.js";
+import { extractFieldValueFromJsonFile } from "./utils.js";
 
 const SERVER_NAME: string = "automate-idea-to-social-mcp";
-const SERVER_VERSION: string = "1.0.0";
+const SERVER_VERSION: string = extractFieldValueFromJsonFile("../package.json", "version");
 
 // In-memory task storage (in production, this could be a database)
 const taskConfigs: Map<string, TaskConfig> = new Map(); // TODO Bleed this from time to time?
