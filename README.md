@@ -9,49 +9,38 @@ and exposes its functionality through a standardized MCP interface.
 ## Prerequisites
 
 1. **Nodejs**: to run this mcp-server
-2. **Docker** 
+2. **Docker**: to run the [automation server](https://github.com/poshjosh/automate-idea-to-social) 
 
 ## Usage
 
-1. Download and extract (or clone) the project zip file. [Click here](https://github.com/poshjosh/automate-idea-to-social-mcp/archive/refs/heads/main.zip) to download.
+1. [Click here to download the installer script](https://raw.githubusercontent.com/poshjosh/automate-idea-to-social-mcp/refs/heads/main/installer.js).
 
-2. Extract the zip file to a directory of your choice. We will refer to the path to 
-this directory as `<PATH_TO_EXTRACTED_PROJECT>`, in the following steps.
-
-3. Open a terminal/command prompt/shell and run the following commands.
+2. Open a terminal/command prompt/shell and run the following command:
 
 ```bash
-
-# Change to the directory where you extracted the project zip file to.
-# To change to the directory, replace <PATH_TO_EXTRACTED_PROJECT> with 
-# the actual path, and run the command below.
-cd <PATH_TO_EXTRACTED_PROJECT>
-
-# Install dependencies.
-npm install
-
-# Build the project.
-npm run build
+node installer.js
 ```
 
-4. Use the <PATH_TO_EXTRACTED_PROJECT> in the project config, as shown below:
+3. Add the MCP server configuration to your MCP client or IDE.
 
 ```json
 {
   "mcpServers": {
     "automate-idea-to-social-mcp": {
       "command": "node",
-      "args": ["<PATH_TO_EXTRACTED_PROJECT>/build/index.js"],
+      "args": ["${HOME}/.aideas-mcp/automate-idea-to-social-mcp-main/build/index.js"],
       "env": {
-        "AIDEAS_ENV_FILE": "</PATH/TO/file.dot.env>"
+        "AIDEAS_ENV_FILE": "${PATH_TO_DOT_ENV_FILE}"
       }
     }
   }
 }
 ```
 
-Here is the [list of environment variables](https://github.com/poshjosh/automate-idea-to-social/blob/main/docs/environment.md)
-that can be set in the `.env` file.
+Provide values for:
+
+- `${HOME}` - the home directory of the user running the MCP server.
+- `${PATH_TO_DOT_ENV_FILE}`. See the [list of environment variables](https://github.com/poshjosh/automate-idea-to-social/blob/main/docs/environment.md).
 
 ### VS Code
 
@@ -59,7 +48,7 @@ To add an MCP server to your user profile, you can use the `--add-mcp` command l
 provide the JSON server configuration in the format shown below:
 
 ```bash
-code --add-mcp "{\"name\":\"automate-idea-to-social-mcp\",\"command\": \"node\",\"args\": [\"<PATH_TO_EXTRACTED_PROJECT>/build/index.js\"],\"env\": {\"AIDEAS_ENV_FILE\": \"/</PATH/TO/file.dot.env>\"}}"
+code --add-mcp "{\"name\":\"automate-idea-to-social-mcp\",\"command\": \"node\",\"args\": [\"${HOME}/.aideas-mcp/automate-idea-to-social-mcp-main/build/index.js\"],\"env\": {\"AIDEAS_ENV_FILE\": \"/${PATH_TO_DOT_ENV_FILE}\"}}"
 ```
 
 ## Supported Social Media (and other) Agents
