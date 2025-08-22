@@ -1,1 +1,0 @@
-Using Model Context Protocol (MCP) post a tweet to Twitter (now X) with content: "I love Jesus the Christ".

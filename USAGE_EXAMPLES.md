@@ -1,6 +1,6 @@
 # Usage Examples for Automate Idea to Social MCP Server
 
-This document provides practical examples of how to use the MCP server tools for automating content creation and social media publishing.
+This document provides practical examples of how to use the MCP server tools for publishing content to social media.
 
 ## Quick Start Examples
 
@@ -15,29 +15,10 @@ validate_setup
 **Expected Response:**
 ```json
 {
-  "overall_status": "ready",
-  "checks": [
-    {
-      "check": "Project path exists",
-      "status": "pass",
-      "path": "/Users/chinomso/dev_ai/automate-idea-to-social"
-    },
-    {
-      "check": "main.py exists",
-      "status": "pass"
-    },
-    {
-      "check": "Agent configs found",
-      "status": "pass",
-      "count": 13,
-      "agents": ["blog", "twitter", "youtube", "facebook", "instagram"]
-    },
-    {
-      "check": "Python3 available",
-      "status": "pass"
-    }
-  ],
-  "message": "Setup validation passed"
+  "setup": {
+    "valid": true,
+    "reason": "Setup is valid"
+  }
 }
 ```
 
@@ -54,20 +35,16 @@ list_agents
 {
   "agents": [
     "blog",
-    "copy-files-to-pictory-output",
     "facebook",
-    "image-generator",
     "instagram",
-    "pictory",
     "reddit",
     "subtitles-translation",
-    "test-agent",
     "tiktok",
     "translation",
     "twitter",
     "youtube"
   ],
-  "total": 13,
+  "total": 9,
   "filter_applied": null
 }
 ```
@@ -377,10 +354,11 @@ create_automation_task agents=["reddit", "twitter"] text_content="What's your fa
 
 If `validate_setup` fails:
 
-1. Check that `AIDEAS_PROJECT_DIR` is correctly set
-2. Ensure the automate-idea-to-social project is properly installed
-3. Verify Python dependencies are installed
-4. Check file permissions
+1. Check that Docker is installed and running.
+2. Check that Nodejs is installed.
+3. Check that your `AIDEAS_ENV_FILE` location is correct.
+4. Check that your `AIDEAS_ENV_FILE` contains the required values for the agents you want to use.
+5. Check file permissions
 
 ### Task Failures
 
@@ -388,16 +366,15 @@ If tasks fail:
 
 1. Check task status with `get_task_status`
 2. Review error messages in the response
-3. Ensure platform credentials are configured
-4. Verify content meets platform requirements (length, format, etc.)
+3. Ensure credentials required by the agent are configured in your `AIDEAS_ENV_FILE`
+4. Verify content meets agent requirements (length, format, etc.)
 
 ### Agent Issues
 
 If agents are not found:
 
 1. Use `list_agents` to see available agents
-2. Check agent configuration files exist
+2. Check that agent configuration files exist
 3. Verify agent names are spelled correctly
-4. Ensure the project is up to date
 
 This comprehensive guide should help you get started with the MCP server and explore its full capabilities for automating your social media content workflow.

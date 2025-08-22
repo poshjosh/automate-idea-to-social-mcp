@@ -1,6 +1,9 @@
 # custom
 git-ignore/
 
+.DS_Store
+build/
+
 # environments
 .env
 .env.test
