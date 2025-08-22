@@ -1,4 +1,4 @@
-# Automate Idea to Social MCP Server - Project Summary
+# Automate Idea to Social - MCP Server
 
 ## Overview
 
@@ -13,9 +13,12 @@ and exposes its functionality through a standardized MCP interface.
 
 ## Usage
 
-1. Download and extract (or clone) the project zip file.
+1. Download and extract (or clone) the project zip file. [Click here](https://github.com/poshjosh/automate-idea-to-social-mcp/archive/refs/heads/main.zip) to download.
 
-2. Open a terminal/command prompt/shell and run the following commands.
+2. Extract the zip file to a directory of your choice. We will refer to the path to 
+this directory as `<PATH_TO_EXTRACTED_PROJECT>`, in the following steps.
+
+3. Open a terminal/command prompt/shell and run the following commands.
 
 ```bash
 
@@ -31,7 +34,7 @@ npm install
 npm run build
 ```
 
-3. Use the <PATH_TO_EXTRACTED_PROJECT> in the project config, as shown below:
+4. Use the <PATH_TO_EXTRACTED_PROJECT> in the project config, as shown below:
 
 ```json
 {
