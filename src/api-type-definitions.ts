@@ -1,14 +1,15 @@
 // Define types for agent configurations and tasks
 export interface AgentConfig {
-    'agent-type': string;
-    'agent-tags': string;
+    'agent-type'?: string;
+    'agent-tags'?: string;
     'sort-order'?: number;
-    stages: Record<string, any>;
+    stages?: Record<string, any>;
 }
 
 export interface TaskConfig {
+    tag?: string;
     agents: string[];
-    'language-codes': string;
+    'language-codes'?: string;
     'text-file'?: string;
     'text-title'?: string;
     'text-content'?: string;
@@ -17,17 +18,15 @@ export interface TaskConfig {
     'share-cover-image'?: boolean;
 }
 
-export interface TaskStatus {
-    id: string;
-    status: TaskState;
-    agents: string[];
-    startTime?: string;
-    endTime?: string;
-    results?: any;
-    error?: string;
+export interface Task {
+    id: string,
+    agents: string[],
+    links: Record<string, any>,
+    progress: Record<string, any>,
+    status: TaskStatus,
 }
 
-export const TaskStates = {
+export const TaskStatuses = {
     PENDING: 'PENDING',
     SKIPPED: 'SKIPPED',
     LOADING: 'LOADING',
@@ -37,5 +36,5 @@ export const TaskStates = {
     STOPPED: 'STOPPED'
 } as const;
 
-export type TaskState = (typeof TaskStates)[keyof typeof TaskStates];
+export type TaskStatus = (typeof TaskStatuses)[keyof typeof TaskStatuses];
 

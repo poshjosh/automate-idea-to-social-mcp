@@ -2,22 +2,33 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as yaml from "js-yaml";
-import { AIDEAS_ENV_FILE, AIDEAS_PROJECT_DIR, CONFIG_DIR } from "./environment.js";
+import {
+  AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_CONFIG_DIR, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS
+} from "./environment.js";
 import { clearLogs, getLogs, logError, logInfo, logThrown } from "./logger.js";
-import { AgentConfig, TaskConfig, TaskState, TaskStates, TaskStatus } from "./type-definitions.js";
+import {
+  AgentConfig,
+  Task,
+  TaskConfig,
+  TaskStatus,
+  TaskStatuses,
+} from "./api-type-definitions.js";
+import {
+  DockerContainerResult,
+  DockerStatus,
+  createAndRunContainer,
+  checkDockerStatus, stopAndRemoveContainer
+} from "./docker-utils.js";
+import {ApiClient, createApiClient} from "./api-client.js";
 
 const SERVER_NAME: string = "automate-idea-to-social-mcp";
 const SERVER_VERSION: string = "1.0.0";
 
-const execAsync = promisify(exec);
-
 // In-memory task storage (in production, this could be a database)
-const tasks: Map<string, TaskStatus> = new Map();
+const taskConfigs: Map<string, TaskConfig> = new Map(); // TODO Bleed this from time to time?
 
 // Create an MCP server
 const server = new McpServer({
@@ -25,22 +36,50 @@ const server = new McpServer({
   version: SERVER_VERSION
 });
 
-function checkProjectDir() {
-  if (!AIDEAS_PROJECT_DIR) {
-    throw new Error('AIDEAS_PROJECT_DIR not set');
+interface AppStatus {
+  error: boolean;
+  message: string;
+}
+
+async function setupApp(timeout: number = 30): Promise<AppStatus> {
+  const dockerStatus: DockerStatus = await checkDockerStatus();
+  let isError: boolean;
+  let message;
+  if (dockerStatus.error) {
+    isError = true;
+    message = dockerStatus.message;
+  } else {
+    const apiClient: ApiClient = await getOrCreateApiClient();
+    isError = !(await apiClient.isUp(timeout));
+    message = isError ? "Server is not available" : "Server is up and running";
   }
+  return {
+    error: isError,
+    message: message
+  };
+}
+
+async function getOrCreateApiClient(): Promise<ApiClient> {
+  const result: DockerContainerResult | null = await createAndRunContainer(
+      AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS);
+  if (!result) {
+    throw new Error(`Failed to run container for image: ${AIDEAS_IMAGE_NAME} on port: ${AIDEAS_PORT}`);
+  }
+
+  const apiEndpoint = `http://localhost:${result.port}`;
+
+  return createApiClient(apiEndpoint);
 }
 
 // Helper functions
-async function getAvailableAgents(): Promise<string[]> {
+async function getAvailableAgents(tag: string | null = null): Promise<string[]> {
   try {
-    logInfo("Getting available agents");
-    checkProjectDir();
-    const agentConfigDir = path.join(AIDEAS_PROJECT_DIR, 'src', 'resources', 'config', 'agent');
-    const files = await fs.readdir(agentConfigDir);
-    return files
-      .filter((file: string) => file.endsWith('.config.yaml'))
-      .map((file: string) => file.replace('.config.yaml', ''));
+    logInfo(`Getting available agents for tag: ${tag}`);
+
+    const apiClient: ApiClient = await getOrCreateApiClient();
+
+    return await apiClient.getAgentNames(tag)
+
   } catch (error) {
     logThrown(`Error reading agent configs`, error);
     return [];
@@ -50,61 +89,75 @@ async function getAvailableAgents(): Promise<string[]> {
 async function getAgentConfig(agentName: string): Promise<AgentConfig | null> {
   try {
     logInfo(`Getting agent config for: ${agentName}`);
-    checkProjectDir();
-    const configPath = path.join(AIDEAS_PROJECT_DIR, 'src', 'resources', 'config', 'agent', `${agentName}.config.yaml`);
-    const configContent = await fs.readFile(configPath, 'utf8');
-    return yaml.load(configContent) as AgentConfig;
+
+    const apiClient: ApiClient = await getOrCreateApiClient();
+
+    return await apiClient.getAgentConfig(agentName);
+
   } catch (error) {
     logThrown(`Error reading config for agent: ${agentName}`, error);
     return null;
   }
 }
 
-async function runAutomationTask(taskId: string, config: TaskConfig): Promise<void> {
-  const task = tasks.get(taskId);
+async function getTask(taskId: string): Promise<Task | null> {
   try {
-    logInfo(`Running task with ID: ${taskId}, config: ${JSON.stringify(config)}`);
-    checkProjectDir();
+    logInfo(`Getting task by ID: ${taskId}`);
 
-    if (!task) {
-      logInfo(`Task with ID: ${taskId} not found`);
-      return;
+    const apiClient: ApiClient = await getOrCreateApiClient();
+
+    return await apiClient.getTask(taskId);
+
+  } catch (error) {
+    taskConfigs.delete(taskId);
+    logThrown(`Error getting task by ID: ${taskId}`, error);
+    return null;
+  }
+}
+
+async function runAutomationTask(config: TaskConfig): Promise<string | null> {
+  let tempRunConfigPath: string | null = null;
+  try {
+    logInfo(`Preparing to run task with config: ${JSON.stringify(config)}`);
+
+    if (!config) {
+      logError(`Task config is required.`);
+      return null;
     }
 
-    task.status = TaskStates.RUNNING;
-    task.startTime = new Date().toISOString();
-
     // Create a temporary config file for this task
-    const tempRunConfigPath = path.join(CONFIG_DIR, `run.config.yaml`);
+    tempRunConfigPath = path.join(AIDEAS_CONFIG_DIR, `run.config.yaml`);
     const configYaml = yaml.dump(config);
-    // TODO Delete after use
     await fs.writeFile(tempRunConfigPath, configYaml);
     logInfo(`Temporary run config created at: ${tempRunConfigPath}`);
 
-    // Run the automation
-    // The working directory must be <PROJECT_PATH>/src
-    const command = `cd "${AIDEAS_PROJECT_DIR}/src" && set -a && source "${AIDEAS_ENV_FILE}" && set +a && ../.venv/bin/python3 aideas/main.py`;
-    const { stdout, stderr } = await execAsync(command);
+    const apiClient: ApiClient = await getOrCreateApiClient();
 
-    task.status = TaskStates.SUCCESS;
-    task.endTime = new Date().toISOString();
-    task.results = { stdout, stderr };
+    // Create and run the automation task
+    const taskId: string = await apiClient.createTask(config);
 
-    logInfo(`Task ID: ${taskId} completed successfully`);
+    logInfo(`Task ID: ${taskId} successfully created`);
 
-    // Clean up temp config
-    await fs.unlink(tempRunConfigPath).catch(() => {
-        logError(`Failed to delete temporary run config at: ${tempRunConfigPath}`);
-    });
+    return taskId;
+
   } catch (error) {
-    logThrown(`Error running task with ID: ${taskId}`, error);
-    if (!task) {
-      return;
+    logThrown(`Error running creating task with config: ${JSON.stringify(config)}`, error);
+    return null;
+  } finally {
+    if (tempRunConfigPath) {
+      // Clean up temp config
+      await fs.unlink(tempRunConfigPath).catch(() => {
+        logError(`Failed to delete temporary run config at: ${tempRunConfigPath}`);
+      });
     }
-    task.status = TaskStates.FAILURE;
-    task.endTime = new Date().toISOString();
-    task.error = error instanceof Error ? error.message : String(error);
   }
+}
+
+function withLogs(message: string | null = null, error?: unknown): string {
+  error = error ? (error instanceof Error ? error.message : String(error)) : '';
+  const logsPrefix = '- - - - - - - - - - logs - - - - - - - - - -';
+  const logsSuffix = '- - - - - - - - - - - - - - - - - - - - - - -';
+  return `${message ?? ''} ${error}.\n${logsPrefix}\n${getLogs().join('\n')}\n${logsSuffix}`;
 }
 
 // Tool: List available agents
@@ -118,29 +171,15 @@ server.tool(
       clearLogs(); // Clear logs at the start of the tool execution
       logInfo(`Listing agents with filter: ${filter_by_tag ?? 'none'}`);
 
-      const agents = await getAvailableAgents();
-      let filteredAgents = agents;
-
-      if (filter_by_tag) {
-        const agentDetails = await Promise.all(
-          agents.map(async (agent) => {
-            const config = await getAgentConfig(agent);
-            return { name: agent, config };
-          })
-        );
-
-        filteredAgents = agentDetails
-          .filter(({ config }) => config?.['agent-tags']?.includes(filter_by_tag))
-          .map(({ name }) => name);
-      }
+      const agents = await getAvailableAgents(filter_by_tag);
 
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
-              agents: filteredAgents,
-              total: filteredAgents.length,
+              agents: agents,
+              total: agents.length,
               filter_applied: filter_by_tag ?? null
             }, null, 2),
           },
@@ -151,7 +190,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Error listing agents: ${error instanceof Error ? error.message : String(error)}`,
+            text: withLogs('Error listing agents: ', error),
           },
         ],
         isError: true,
@@ -171,13 +210,13 @@ server.tool(
       clearLogs(); // Clear logs at the start of the tool execution
       logInfo(`Getting config for agent: ${agent_name}`);
 
-      const config = await getAgentConfig(agent_name);
-      if (!config) {
+      const agentConfig = await getAgentConfig(agent_name)
+      if (!agentConfig) {
         return {
           content: [
             {
               type: "text",
-              text: `Agent '${agent_name}' not found`,
+              text: withLogs(`Agent \'${agent_name}\' not found.`),
             },
           ],
           isError: true,
@@ -188,7 +227,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: JSON.stringify(config, null, 2),
+            text: JSON.stringify(agentConfig, null, 2),
           },
         ],
       };
@@ -197,7 +236,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Error getting agent config: ${error instanceof Error ? error.message : String(error)}`,
+            text: withLogs(`Error getting config for agent: ${agent_name}`, error)
           },
         ],
         isError: true,
@@ -223,17 +262,26 @@ server.tool(
       clearLogs(); // Clear logs at the start of the tool execution
       logInfo(`Creating automation task for agents: ${agents}`);
 
-      const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      
       // Validate agents exist
       const availableAgents = await getAvailableAgents();
+      if (availableAgents.length == 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: withLogs(`No agents available. Please ensure agents are configured.`),
+            },
+          ],
+          isError: true,
+        };
+      }
       const invalidAgents = agents.filter(agent => !availableAgents.includes(agent));
       if (invalidAgents.length > 0) {
         return {
           content: [
             {
               type: "text",
-              text: `Invalid agents: ${invalidAgents.join(', ')}. Available agents: ${availableAgents.join(', ')}`,
+              text: withLogs(`Invalid agents: ${invalidAgents.join(', ')}. Available agents: ${availableAgents.join(', ')}`),
             },
           ],
           isError: true,
@@ -241,29 +289,35 @@ server.tool(
       }
 
       // Create task configuration
+      // Mandatory fields
       const taskConfig: TaskConfig = {
         agents,
         'language-codes': language_codes,
         'text-content': text_content,
-        'share-cover-image': share_cover_image,
+        'share-cover-image': share_cover_image ?? true,
       };
 
+      // Optional fields
       if (text_title) taskConfig['text-title'] = text_title;
       if (image_file_landscape) taskConfig['image-file-landscape'] = image_file_landscape;
       if (image_file_square) taskConfig['image-file-square'] = image_file_square;
 
-      // Create task status
-      const task: TaskStatus = {
-        id: taskId,
-        status: TaskStates.PENDING,
-        agents,
-      };
-
-      tasks.set(taskId, task);
-
       // Start the task asynchronously
       // TODO: Should we use await here?
-      runAutomationTask(taskId, taskConfig);
+      const taskId = await runAutomationTask(taskConfig);
+      if (!taskId) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: withLogs(`Error creating automation task. No task ID was returned.`),
+            },
+          ],
+          isError: true,
+        };
+      }
+      
+      taskConfigs.set(taskId, taskConfig);
 
       return {
         content: [
@@ -271,7 +325,7 @@ server.tool(
             type: "text",
             text: JSON.stringify({
               task_id: taskId,
-              status: TaskStates.PENDING,
+              status: TaskStatuses.PENDING,
               agents,
               message: 'Task created and started'
             }, null, 2),
@@ -283,7 +337,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Error creating automation task: ${error instanceof Error ? error.message : String(error)}`,
+            text: withLogs(`Error creating automation task: `, error),
           },
         ],
         isError: true,
@@ -303,13 +357,27 @@ server.tool(
       clearLogs(); // Clear logs at the start of the tool execution
       logInfo(`Getting status for task ID: ${task_id}`);
 
-      const task = tasks.get(task_id);
-      if (!task) {
+      const taskConfig = taskConfigs.get(task_id);
+      if (!taskConfig) {
         return {
           content: [
             {
               type: "text",
-              text: `Task '${task_id}' not found`,
+              text: withLogs(`Task '${task_id}' not found`),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const task: Task | null = await getTask(task_id);
+      if (!task) {
+        taskConfigs.delete(task_id);
+        return {
+          content: [
+            {
+              type: "text",
+              text: withLogs(`Task not found, ID '${task_id}': Task not found`),
             },
           ],
           isError: true,
@@ -325,11 +393,12 @@ server.tool(
         ],
       };
     } catch (error) {
+      taskConfigs.delete(task_id);
       return {
         content: [
           {
             type: "text",
-            text: `Error getting task status: ${error instanceof Error ? error.message : String(error)}`,
+            text: withLogs(`Error getting task status: `, error),
           },
         ],
         isError: true,
@@ -342,8 +411,8 @@ server.tool(
 server.tool(
   "list_tasks",
   {
-    status_filter: z.string().refine((state): state is TaskState => {
-        return Object.values(TaskStates).includes(state as TaskState);
+    status_filter: z.string().refine((state): state is TaskStatus => {
+        return Object.values(TaskStatuses).includes(state as TaskStatus);
     }),
   },
   async ({ status_filter }) => {
@@ -351,8 +420,17 @@ server.tool(
       clearLogs(); // Clear logs at the start of the tool execution
       logInfo(`Listing tasks with status filter: ${status_filter ?? 'none'}`);
 
-      let taskList = Array.from(tasks.values());
-      
+      const apiClient: ApiClient = await getOrCreateApiClient();
+
+      let taskList: Task[] = await apiClient.getTasks();
+
+      // Delete stale tasks
+      for (const taskId of taskConfigs.keys()) {
+        if (!taskList.find(t => t.id === taskId)) {
+          taskConfigs.delete(taskId);
+        }
+      }
+
       if (status_filter) {
         taskList = taskList.filter(task => task.status === status_filter);
       }
@@ -374,7 +452,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Error listing tasks: ${error instanceof Error ? error.message : String(error)}`,
+            text: withLogs(`Error listing tasks with status: ${status_filter}`, error),
           },
         ],
         isError: true,
@@ -392,61 +470,22 @@ server.tool(
       clearLogs(); // Clear logs at the start of the tool execution
       logInfo(`Validating automation setup`);
 
-      const checks = [];
-      
-      // Check if project path exists
-      try {
-        await fs.access(AIDEAS_PROJECT_DIR);
-        checks.push({ check: 'Project path exists', status: 'pass', path: AIDEAS_PROJECT_DIR });
-      } catch {
-        checks.push({ check: 'Project path exists', status: 'fail', path: AIDEAS_PROJECT_DIR });
-      }
-
-      // Check if main.py exists
-      try {
-        const mainPyPath = path.join(AIDEAS_PROJECT_DIR, 'src', 'aideas', 'main.py');
-        await fs.access(mainPyPath);
-        checks.push({ check: 'main.py exists', status: 'pass', path: mainPyPath });
-      } catch {
-        checks.push({ check: 'main.py exists', status: 'fail' });
-      }
-
-      // Check if agent configs exist
-      try {
-        const agents = await getAvailableAgents();
-        checks.push({ check: 'Agent configs found', status: 'pass', count: agents.length, agents: agents.slice(0, 5) });
-      } catch {
-        checks.push({ check: 'Agent configs found', status: 'fail' });
-      }
-
-      // Check Python availability
-      try {
-        await execAsync('../.venv/bin/python3 --version');
-        checks.push({ check: 'Python3 available', status: 'pass' });
-      } catch {
-        checks.push({ check: 'Python3 available', status: 'fail' });
-      }
-
-      const allPassed = checks.every(check => check.status === 'pass');
-
+      const appStatus: DockerStatus = await checkDockerStatus();
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify({
-              overall_status: allPassed ? 'ready' : 'issues_found',
-              checks,
-              message: allPassed ? 'Setup validation passed' : 'Some issues found - check individual items'
-            }, null, 2),
+            text: JSON.stringify({ setup: { valid: !appStatus.error, reason: `${appStatus.message}` }}, null, 2),
           },
         ],
+        isError: appStatus.error,
       };
     } catch (error) {
       return {
         content: [
           {
             type: "text",
-            text: `Error validating setup: ${error instanceof Error ? error.message : String(error)}`,
+            text: withLogs(`Error validating setup: `, error),
           },
         ],
         isError: true,
@@ -490,7 +529,41 @@ server.tool(
     }
 );
 
+process.on("SIGTERM", async () => {
+    logInfo(`Received SIGTERM, shutting down...`);
+    try {
+      await stopAndRemoveContainer(AIDEAS_IMAGE_NAME);
+    } finally {
+      process.exit(0);
+    }
+});
+
+process.on("SIGINT", async () => {
+  logInfo(`Received SIGINT, shutting down...`);
+  try {
+    await stopAndRemoveContainer(AIDEAS_IMAGE_NAME);
+  } finally {
+    process.exit(0);
+  }
+});
+
+process.on("exit", async code => {
+  logInfo(`App exited with code: ${code}, shutting down...`);
+  try {
+    await stopAndRemoveContainer(AIDEAS_IMAGE_NAME);
+  } finally {
+    process.exit(code);
+  }
+});
+
 // Start receiving messages on stdin and sending messages on stdout
 const transport = new StdioServerTransport();
 await server.connect(transport);
-logInfo(`MCP server: ${SERVER_NAME} v${SERVER_VERSION} is running on stdio`)
+logInfo(`MCP server: ${SERVER_NAME} v${SERVER_VERSION} is running on stdio\nPress Ctrl+C to exit`);
+// const appStatus: AppStatus = await setupApp(30);
+// if (appStatus.error) {
+//   logError(appStatus.message);
+//   process.exit(1);
+// } else {
+//   logInfo(`MCP server: ${SERVER_NAME} v${SERVER_VERSION} is running on stdio\nPress Ctrl+C to exit`);
+// }
