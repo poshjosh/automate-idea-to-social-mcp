@@ -2,11 +2,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import * as fs from "fs/promises";
-import * as path from "path";
-import * as yaml from "js-yaml";
 import {
-  AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_CONFIG_DIR, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS
+  AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS
 } from "./environment.js";
 import { clearLogs, getLogs, logError, logInfo, logThrown } from "./logger.js";
 import {
@@ -23,10 +20,9 @@ import {
   checkDockerStatus, stopAndRemoveContainer
 } from "./docker-utils.js";
 import { ApiClient, createApiClient } from "./api-client.js";
-import { extractFieldValueFromJsonFile } from "./utils.js";
 
 const SERVER_NAME: string = "automate-idea-to-social-mcp";
-const SERVER_VERSION: string = extractFieldValueFromJsonFile("../package.json", "version");
+const SERVER_VERSION: string = "0.0.1"
 
 // In-memory task storage (in production, this could be a database)
 const taskConfigs: Map<string, TaskConfig> = new Map(); // TODO Bleed this from time to time?
@@ -126,12 +122,6 @@ async function runAutomationTask(config: TaskConfig): Promise<string | null> {
       return null;
     }
 
-    // Create a temporary config file for this task
-    tempRunConfigPath = path.join(AIDEAS_CONFIG_DIR, `run.config.yaml`);
-    const configYaml = yaml.dump(config);
-    await fs.writeFile(tempRunConfigPath, configYaml);
-    logInfo(`Temporary run config created at: ${tempRunConfigPath}`);
-
     const apiClient: ApiClient = await getOrCreateApiClient();
 
     // Create and run the automation task
@@ -144,13 +134,6 @@ async function runAutomationTask(config: TaskConfig): Promise<string | null> {
   } catch (error) {
     logThrown(`Error running creating task with config: ${JSON.stringify(config)}`, error);
     return null;
-  } finally {
-    if (tempRunConfigPath) {
-      // Clean up temp config
-      await fs.unlink(tempRunConfigPath).catch(() => {
-        logError(`Failed to delete temporary run config at: ${tempRunConfigPath}`);
-      });
-    }
   }
 }
 

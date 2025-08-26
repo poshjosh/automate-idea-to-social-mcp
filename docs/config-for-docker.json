@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "automate-idea-to-social-mcp": {
+      "command": "docker",
+      "args": [
+        "run", "-u", "0", "-i", "--rm",
+        "--name", "poshjosh-aideas-mcp-latest",
+        "-v", "/var/run/docker.sock:/var/run/docker.sock",
+        "-e", "APP_PROFILES=docker",
+        "poshjosh/aideas-mcp:latest"
+      ],
+      "env": {
+        "AIDEAS_RUN_ARGS": "--facebook-user-email <my@email.com> --facebook-user-pass <mypass>"
+      }
+    }
+  }
+}

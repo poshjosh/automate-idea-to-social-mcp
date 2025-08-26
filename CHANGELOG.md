@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Parsing of MCP server version from package.json
 - LICENSE
 - CHANGELOG
 - First commit with initial files.

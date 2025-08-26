@@ -87,10 +87,10 @@ async function checkDockerStatus(): Promise<DockerStatus> {
 /**
  * Creates a container name from a docker image name
  * @param imageName - The docker image name (e.g., "nginx:latest", "my-repo/app:1.0")
- * @param suffixToAppend - Optional suffix to append to the container name (default: "mcp-container")
+ * @param suffixToAppend - Optional suffix to append to the container name (default: "-container-by-mcp-server")
  * @returns The generated container name
  */
-function createContainerName(imageName: string, suffixToAppend: string = "-mcp-container"): string {
+function createContainerName(imageName: string, suffixToAppend: string = "-container-by-mcp-server"): string {
     // Extract image name without version (remove everything after ':')
     const nameWithoutVersion = imageName.split(':')[0];
 
@@ -172,14 +172,20 @@ async function runContainer(imageName: string, containerName: string, port: numb
         // First, stop and remove any existing container with the same name
         // await stopAndRemoveContainer(containerName);
 
+        const parts = [
+            "docker", "run", "-u", user, "-di", "--rm", "--name", containerName,
+            "-p", `${port}:${port}`,
+            "-v", "/etc/localtime:/etc/localtime",
+            "-v", "/var/run/docker.sock:/var/run/docker.sock",
+            "-e", `APP_PORT=${port}`,
+            runCommandExtras,
+            imageName
+        ];
+
+        const command = parts.filter(Boolean).join(" ")
+        logInfo(`Executing command:\n${command}`);
+
         // Run the new container
-        let command =
-`docker run --name ${containerName} -u ${user} -p ${port}:${port} -d \
--v /etc/localtime:/etc/localtime \
--v /var/run/docker.sock:/var/run/docker.sock \
--e APP_PORT=${port} \
-${runCommandExtras ?? ''} ${imageName}`;
-        // logInfo(`Executing command:\n${command}`);
         await execAsync(command);
 
         // Wait a moment and check if the container is actually running

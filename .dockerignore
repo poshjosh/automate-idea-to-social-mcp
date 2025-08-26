@@ -1,0 +1,15 @@
+.DS_Store
+.git/
+.idea/
+build/
+docs/
+git-ignore/
+node_modules/
+shell/
+.env
+.env.*
+.gitignore
+*.iml
+*.md
+
+*.log

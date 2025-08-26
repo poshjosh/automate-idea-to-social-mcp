@@ -2,8 +2,10 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/Users/chinomso/dev_ai/automate-idea-to-social-mcp"
+cd .. || exit 1
 
-export AIDEAS_ENV_FILE="${PROJECT_DIR}/git-ignore/mcp-example-env/run.env"
+set -a
+source .env
+set +a
 
-node "${PROJECT_DIR}/build/index.js"
+node build/index.js
