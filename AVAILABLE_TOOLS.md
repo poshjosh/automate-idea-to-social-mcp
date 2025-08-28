@@ -54,7 +54,7 @@ Check the status of task task_1704123456789_abc123def
 Lists all tasks with optional filtering.
 
 **Parameters:**
-- `status_filter` (optional): Filter tasks by status ('pending', 'running', 'completed', 'failed')
+- `filter_by_status` (optional): Filter tasks by status ('pending', 'running', 'completed', 'failed')
 
 **Example:**
 ```

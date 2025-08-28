@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Persistent store
 - LICENSE
 - CHANGELOG
 - First commit with initial files.

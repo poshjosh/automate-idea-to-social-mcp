@@ -7,6 +7,7 @@ const execAsync = promisify(exec);
 
 interface DockerContainerResult {
     containerName: string;
+    ip: string;
     port: number;
 }
 
@@ -24,7 +25,7 @@ async function isDockerInstalled(): Promise<boolean> {
         await execAsync('docker --version');
         return true;
     } catch (error) {
-        logThrown("Docker is not installed.", error);
+        logThrown("@docker-utils. Docker is not installed.", error);
         return false;
     }
 }
@@ -39,7 +40,7 @@ async function isDockerRunning(): Promise<boolean> {
         await execAsync('docker info');
         return true;
     } catch (error) {
-        logThrown("Docker is not running.", error);
+        logThrown("@docker-utils. Docker is not running.", error);
         return false;
     }
 }
@@ -99,7 +100,7 @@ function createContainerName(imageName: string, suffixToAppend: string = "-conta
 
     const result =  `${nameWithDashes}${suffixToAppend}`;
 
-    // logInfo(`Generated container name: ${result}`);
+    // logInfo(`@docker-utils. Generated container name: ${result}`);
 
     return result;
 }
@@ -114,7 +115,7 @@ async function isContainerRunning(containerName: string): Promise<boolean> {
         const { stdout } = await execAsync(`docker ps --filter "name=${containerName}" --filter "status=running" --format "{{.Names}}"`);
         return stdout.trim().includes(containerName);
     } catch (error) {
-        logThrown('Error checking container status:', error);
+        logThrown('@docker-utils. Error checking container status:', error);
         return false;
     }
 }
@@ -183,7 +184,7 @@ async function runContainer(imageName: string, containerName: string, port: numb
         ];
 
         const command = parts.filter(Boolean).join(" ")
-        logInfo(`Executing command:\n${command}`);
+        logInfo(`@docker-utils. Executing command:\n${command}`);
 
         // Run the new container
         await execAsync(command);
@@ -192,7 +193,7 @@ async function runContainer(imageName: string, containerName: string, port: numb
         await new Promise(resolve => setTimeout(resolve, 1000));
         return await isContainerRunning(containerName);
     } catch (error) {
-        logThrown('Error running container:', error);
+        logThrown('@docker-utils. Error running container:', error);
         return false;
     }
 }
@@ -205,10 +206,10 @@ async function runContainer(imageName: string, containerName: string, port: numb
  */
 async function stopAndRemoveContainer(imageName: string): Promise<boolean> {
     const containerName = createContainerName(imageName);
-    logInfo(`Stopping and removing container: ${containerName}`);
+    logInfo(`@docker-utils. Stopping and removing container: ${containerName}`);
     try {
         if (!await isContainerRunning(containerName)) {
-            logInfo(`Container ${containerName} is not running, nothing to stop.`);
+            logInfo(`@docker-utils. Container ${containerName} is not running, nothing to stop.`);
             return true;
         }
         // First, stop and remove any existing container with the same name
@@ -221,9 +222,19 @@ async function stopAndRemoveContainer(imageName: string): Promise<boolean> {
         await new Promise(resolve => setTimeout(resolve, 1000));
         return !(await isContainerRunning(containerName));
     } catch (error) {
-        logThrown('Error running container:', error);
+        logThrown('@docker-utils. Error running container:', error);
         return false;
     }
+}
+
+async function getInternalIp(containerName: string) {
+    const result = await execAsync(
+        `docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName}`);
+    logInfo(`@docker-utils. Get IP result: ${JSON.stringify(result)}, container: ${containerName}`);
+    if (result.stderr) {
+        throw new Error(`Error getting internal IP of container:${containerName}. ${result.stderr}`);
+    }
+    return result?.stdout.trim();
 }
 
 /**
@@ -238,55 +249,56 @@ async function createAndRunContainer(imageName: string, port: number, runCommand
     try {
         // Step 1: Create container name
         const containerName = createContainerName(imageName);
-        logInfo(`Starting container: ${containerName} on port: ${port}...`);
+        logInfo(`@docker-utils. Starting container: ${containerName} on port: ${port}...`);
 
         // Step 2: Check if container is already running
         if (await isContainerRunning(containerName)) {
-            logInfo(`Container ${containerName} is already running`);
-            return { containerName, port };
+            logInfo(`@docker-utils. Container ${containerName} is already running`);
+            return { containerName, ip: await getInternalIp(containerName), port };
         }
 
         // Step 3: Check if the desired port is available
         let availablePort = port;
         if (!(await isPortAvailable(port))) {
-            logInfo(`Port ${port} is occupied, finding alternative port...`);
+            logInfo(`@docker-utils. Port ${port} is occupied, finding alternative port...`);
             const foundPort = await findAvailablePort(port + 1);
             if (foundPort === null) {
-                logError('No available ports found');
+                logError('@docker-utils. No available ports found');
                 return null;
             }
             availablePort = foundPort;
-            logInfo(`Using available port: ${availablePort} instead of provided port: ${port}`);
+            logInfo(`@docker-utils. Using available port: ${availablePort} instead of provided port: ${port}`);
         }
 
         // Step 4: Run the container
         const success = await runContainer(imageName, containerName, availablePort, runCommandExtras, user);
 
         if (success) {
-            logInfo(`Container ${containerName} started successfully on port ${availablePort}`);
-            return { containerName, port: availablePort };
+            logInfo(`@docker-utils. Container ${containerName} started successfully on port ${availablePort}`);
+            return { containerName, ip: await getInternalIp(containerName), port: availablePort };
         } else {
-            logError('Failed to start container');
+            logError('@docker-utils. Failed to start container');
             return null;
         }
     } catch (error) {
-        logThrown('Error in manageDockerContainer:', error);
+        logThrown('@docker-utils. Error in manageDockerContainer:', error);
         return null;
     }
 }
 
-// Example usage
-async function main() {
-    const imageName = 'nginx:latest'; // Replace with your image name
-    try {
-        const result = await createAndRunContainer(imageName, 3000);
-        logInfo(`${JSON.stringify(result)}`);
-    } catch(error) {
-        await stopAndRemoveContainer(imageName);
-    }
-}
-
 export { createAndRunContainer, DockerContainerResult, checkDockerStatus, DockerStatus, stopAndRemoveContainer };
+
+
+// Example usage
+// async function main() {
+//     const imageName = 'nginx:latest'; // Replace with your image name
+//     try {
+//         const result = await createAndRunContainer(imageName, 3000);
+//         logInfo(`@docker-utils. ${JSON.stringify(result)}`);
+//     } catch(error) {
+//         await stopAndRemoveContainer(imageName);
+//     }
+// }
 
 // Run the example if this file is executed directly
 // if (require.main === module) {

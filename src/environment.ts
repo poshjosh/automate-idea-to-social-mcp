@@ -2,31 +2,35 @@ import * as os from "os";
 import { readEnvValue } from "./read-env-value.js";
 import { logInfo } from "./logger.js";
 
+export const APP_VERSION = process.env["APP_VERSION"] ?? "0.0.1";
+export const APP_PROFILES = process.env["APP_PROFILES"] ?? "default";
+
 ///////////////////////////////// NOTE //////////////////////////////////////
+// aideas related environment variables
 // Environment which should be passed to aideas should be prefixed with this;
 // Except when those env variables are defined in a separate AIDEAS_ENV_FILE.
 /////////////////////////////////////////////////////////////////////////////
 const PREFIX = "AIDEAS_";
 
-logInfo(`Working from directory: ${process.cwd()}`);
+logInfo(`@environment. Working from directory: ${process.cwd()}`);
 
 const AIDEAS_ENV_FILE = process.env.AIDEAS_ENV_FILE;
-logInfo(`AIDEAS_ENV_FILE: ${AIDEAS_ENV_FILE}`);
+logInfo(`@environment. AIDEAS_ENV_FILE: ${AIDEAS_ENV_FILE}`);
 
-logInfo(`Environment:\n${JSON.stringify(process.env)}`);
+logInfo(`@environment. \n${JSON.stringify(process.env)}`);
 
-function requireEnvValue(name: string, fallback: string): string {
+function requireAideasEnvValue(name: string, fallback: string): string {
     let value = process.env[`${PREFIX}${name}`];
     if (!value) {
         if (AIDEAS_ENV_FILE) {
             value = readEnvValue(AIDEAS_ENV_FILE, name, fallback);
-            logInfo(`Read ${name} = ${value} from: ${AIDEAS_ENV_FILE}`);
+            logInfo(`@environment. Read ${name} = ${value} from: ${AIDEAS_ENV_FILE}`);
         } else {
             value = fallback;
-            logInfo(`Fallback to ${name} = ${fallback}`);
+            logInfo(`@environment. Fallback to ${name} = ${fallback}`);
         }
     } else {
-        logInfo(`Environment value for ${PREFIX}${name} = ${value}`);
+        logInfo(`@environment. Environment value for ${PREFIX}${name} = ${value}`);
     }
     if (!value) {
         throw new Error(`${name} environment variable is required.`);
@@ -34,17 +38,24 @@ function requireEnvValue(name: string, fallback: string): string {
     return value;
 }
 
-export const AIDEAS_PORT = parseInt(requireEnvValue("APP_PORT", "5001"));
+export const AIDEAS_PORT = parseInt(requireAideasEnvValue("APP_PORT", "5001"));
 
-export const APP_VERSION = requireEnvValue("APP_VERSION", "0.3.4");
-export const AIDEAS_IMAGE_NAME = `poshjosh/aideas:${APP_VERSION}`;
-logInfo(`AIDEAS_IMAGE_NAME = ${AIDEAS_IMAGE_NAME}`);
+const AIDEAS_APP_VERSION = requireAideasEnvValue("APP_VERSION", "0.3.4");
+export const AIDEAS_IMAGE_NAME = `poshjosh/aideas:${AIDEAS_APP_VERSION}`;
+logInfo(`@environment. AIDEAS_IMAGE_NAME = ${AIDEAS_IMAGE_NAME}`);
 
-export const AIDEAS_APP_PROFILES = requireEnvValue("APP_PROFILES", "default");
+export const AIDEAS_APP_PROFILES = requireAideasEnvValue("APP_PROFILES", "default");
+
+// USER_HOME is only required when running in a docker container.
+// From within our docker container, we run the aideas docker container.
+// To run the aideas docker container we mount ${USER_HOME}/.aideas to /root/.aideas
+// We could use the system's ${HOME} variable from within our container,
+// but that would only point to the containers home directory (e.g /root).
+const userHome = process.env["USER_HOME"] || os.homedir();
 
 function getContainerRunCommandExtras(): string {
     const parts = [
-        "-v", `${os.homedir()}/.aideas:/root/.aideas`,
+        "-v", `${userHome}/.aideas:/root/.aideas`,
         "--shm-size=2g",
         "-e", `APP_PROFILES=docker,${AIDEAS_APP_PROFILES}`
     ];

@@ -183,7 +183,7 @@ list_tasks
 Filter by status:
 
 ```
-list_tasks status_filter="completed"
+list_tasks filter_by_status="completed"
 ```
 
 ### 7. Get logs

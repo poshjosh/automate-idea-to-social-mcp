@@ -8,48 +8,53 @@ and exposes its functionality through a standardized MCP interface.
 
 ## Prerequisites
 
-1. **Nodejs**: to run this mcp-server
-2. **Docker**: to run the [automation server](https://github.com/poshjosh/automate-idea-to-social) 
+- **Docker**
 
 ## Usage
 
-1. [Click here to download the installer script](https://raw.githubusercontent.com/poshjosh/automate-idea-to-social-mcp/refs/heads/main/installer.js).
+- In the json configuration below, replace `<MY_HOME_DIRECTORY>` with your home directory (e.g., `/home/thomas` or `C:\Users\jana`).
 
-2. Open a terminal/command prompt/shell and run the following command:
-
-```bash
-node installer.js
-```
-
-3. Add the MCP server configuration to your MCP client or IDE.
+- Add the json configuration below to your MCP client or IDE. 
 
 ```json
 {
   "mcpServers": {
     "automate-idea-to-social-mcp": {
-      "command": "node",
-      "args": ["${HOME}/.aideas-mcp/automate-idea-to-social-mcp-main/build/index.js"],
-      "env": {
-        "AIDEAS_ENV_FILE": "${PATH_TO_DOT_ENV_FILE}"
-      }
+      "command": "docker",
+      "args": [
+        "run", "-u", "0", "-i", "--rm",
+        "-v", "/var/run/docker.sock:/var/run/docker.sock",
+        "-e", "APP_PROFILES=docker",
+        "-e", "USER_HOME=<MY_HOME_DIRECTORY>",
+        "poshjosh/aideas-mcp:0.0.1"
+      ],
+      "env": { }
     }
   }
 }
 ```
 
-Provide values for:
+- Depending on the agents, you may need to provide additional [environment variables]((https://github.com/poshjosh/automate-idea-to-social/blob/main/docs/environment.md)). 
+For example for instagram we add the following to the `args` section above:
 
-- `${HOME}` - the home directory of the user running the MCP server.
-- `${PATH_TO_DOT_ENV_FILE}`. See the [list of environment variables](https://github.com/poshjosh/automate-idea-to-social/blob/main/docs/environment.md).
+```json
+{
+  "mcpServers": {
+    "automate-idea-to-social-mcp": {
+      "args": [
+        "-e", "INSTAGRAM_USER_EMAIL=<MY_INSTAGRAM_EMAIL>",
+        "-e", "INSTAGRAM_USER_PASS=<MY_INSTAGRAM_PASSWORD>"
+      ]
+    }
+  }
+}
+```
+
+See the full list of [environment variables]((https://github.com/poshjosh/automate-idea-to-social/blob/main/docs/environment.md)).
 
 ### VS Code
 
-To add an MCP server to your user profile, you can use the `--add-mcp` command line option, and 
-provide the JSON server configuration in the format shown below:
-
-```bash
-code --add-mcp "{\"name\":\"automate-idea-to-social-mcp\",\"command\": \"node\",\"args\": [\"${HOME}/.aideas-mcp/automate-idea-to-social-mcp-main/build/index.js\"],\"env\": {\"AIDEAS_ENV_FILE\": \"/${PATH_TO_DOT_ENV_FILE}\"}}"
-```
+See [Use MCP servers in VS Code](https://code.visualstudio.com/docs/copilot/customization/mcp-servers)
 
 ## Supported Social Media (and other) Agents
 

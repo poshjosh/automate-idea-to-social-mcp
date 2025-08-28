@@ -7,7 +7,7 @@ import {
     TaskConfig,
     TaskStatuses
 } from "./api-type-definitions.js";
-import { logInfo } from "./logger.js";
+import { logInfo, logThrown } from "./logger.js";
 
 interface ApiResponse {
     success: boolean;
@@ -39,24 +39,32 @@ class ApiClient {
                               retries: number = 2, retryInterval: number = 5000): Promise<ApiResponse> {
         let response;
         while (retries-- >= 0) {
-            logInfo(`ApiClient. Sending ${method} to ${endpoint} with data: ${data ? JSON.stringify(data) : data}`);
-            response = await this._makeRequest(method, endpoint, data);
-            if (response.success && response?.data) {
-                logInfo(`ApiClient. Request successful. Response data:\n${response?.data ? JSON.stringify(response.data) : data}`);
+            response = await this.makeRequestWithoutRetries(method, endpoint, data);
+            if (response.success) {
+                logInfo(`@ApiClient. Request successful. Response data:\n${response?.data ? JSON.stringify(response.data) : response?.data}`);
                 return response
             }
-            logInfo(`ApiClient. Retrying request. Retries left: ${retries}`);
             // Wait some seconds and try again
             await new Promise(resolve => setTimeout(resolve, retryInterval));
+            if (retries >= 0) {
+                logInfo(`@ApiClient. Retrying request. Retries left: ${retries}`);
+            }
         }
         if (!response) {
-            logInfo(`ApiClient. No response.`);
+            logInfo(`@ApiClient. No response.`);
             return { success: false }
         }
+        let printableResponse;
+        try {
+            printableResponse = JSON.stringify(response);
+        } catch (e) {
+            printableResponse = response;
+        }
+        logInfo(`@ApiClient. Request not successful. Response:\n${printableResponse}`);
         return response;
     }
 
-    private async _makeRequest(method: string, endpoint?: string, data?: any): Promise<ApiResponse> {
+    private async makeRequestWithoutRetries(method: string, endpoint?: string, data?: any): Promise<ApiResponse> {
         return new Promise((resolve) => {
             const fullUrl = endpoint ? `${this.baseUrl}${endpoint}` : this.baseUrl;
             const parsedUrl = new URL(fullUrl);
@@ -74,6 +82,7 @@ class ApiClient {
                     'Accept': 'application/json'
                 }
             };
+            logInfo(`@ApiClient. Sending ${method} to ${options.path} with data: ${data ? JSON.stringify(data) : data}`);
 
             const req = httpModule.request(options, (res) => {
                 let responseData = '';
@@ -135,31 +144,22 @@ class ApiClient {
         });
     }
 
+    /**
+     * GET /info/health/status
+     * Get the health status of the API server
+     * @param timeoutSeconds Maximum time to wait for a response
+     * @returns Promise resolving to true if the server is up, false otherwise
+     */
     async isUp(timeoutSeconds: number = 30): Promise<boolean> {
-        logInfo(`ApiClient. Checking if server is up, timeout: ${timeoutSeconds} seconds`);
+        logInfo(`@ApiClient. Checking if server is up, timeout: ${timeoutSeconds} seconds`);
         if (timeoutSeconds < 0) {
             throw new Error("Timeout must be a positive number");
         }
-        while((timeoutSeconds--) >= 0) {
-            const isUp: boolean = await this._isUp();
-            // logInfo(`isUp: ${isUp}, time left: ${timeoutSeconds}`);
-            if (isUp) {
-                return true;
-            }
-            // Wait for 1 second before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        logInfo(`ApiClient. Server is not up, even after waiting ${timeoutSeconds} seconds`);
-        return false;
-    }
-
-    async _isUp(): Promise<boolean> {
         try {
-            // TODO Change to the new health endpoint i.e. GET, '/info/health/status'
-            const response = await this.makeRequest('GET', undefined, null, 0);
+            const response = await this.makeRequest('GET', '/info/health/status', null, 30, 1000);
             return response.success;
         } catch (error) {
-            console.error(`ApiClient. Error checking API health: ${error instanceof Error ? error.message : String(error)}`);
+            logThrown(`@ApiClient. Error checking API health`, error);
             return false;
         }
     }
@@ -171,14 +171,14 @@ class ApiClient {
      * @returns Promise resolving to the names of agents
      */
     async getAgentNames(tag: string | null = null): Promise<string[]> {
-        logInfo(`ApiClient. Getting agent names for tag: ${tag}`);
+        logInfo(`@ApiClient. Getting agent names for tag: ${tag}`);
         const endpoint = tag ? `/api/agents?tag=${encodeURIComponent(tag)}` : '/api/agents';
         const response = await this.makeRequest('GET', endpoint);
 
         if (response.success) {
             return ApiClient.toMap(response?.data).get("agents") || []
         } else {
-            throw new Error(`ApiClient. Failed to get agents: ${response?.error}`);
+            throw new Error(`@ApiClient. Failed to get agents: ${response?.error}`);
         }
     }
 
@@ -189,14 +189,14 @@ class ApiClient {
      * @returns Promise resolving to Agent
      */
     async getAgentConfig(agentName: string): Promise<AgentConfig> {
-        logInfo(`ApiClient. Getting agent config for agent: ${agentName}`);
+        logInfo(`@ApiClient. Getting agent config for agent: ${agentName}`);
         const encodedAgentName = encodeURIComponent(agentName);
         const response = await this.makeRequest('GET', `/api/agents/${encodedAgentName}`);
 
         if (response.success) {
             return ApiClient.toAgentConfig(ApiClient.toMap(response?.data).get("agent"))
         } else {
-            throw new Error(`ApiClient. Failed to get agent ${agentName}: ${response?.error}`);
+            throw new Error(`@ApiClient. Failed to get agent ${agentName}: ${response?.error}`);
         }
     }
 
@@ -207,13 +207,13 @@ class ApiClient {
      * @returns Promise resolving to a Task
      */
     async createTask(taskData: TaskConfig): Promise<string> {
-        logInfo(`ApiClient. Creating task with data: ${JSON.stringify(taskData)}`);
+        logInfo(`@ApiClient. Creating task with data: ${JSON.stringify(taskData)}`);
         const response = await this.makeRequest('POST', '/api/tasks', taskData, 0);
 
         if (response.success) {
             return ApiClient.toMap(response?.data).get("id");
         } else {
-            throw new Error(`ApiClient. Failed to create task: ${response?.error}`);
+            throw new Error(`@ApiClient. Failed to create task: ${response?.error}`);
         }
     }
 
@@ -223,13 +223,14 @@ class ApiClient {
      * @returns Promise resolving to an array Tasks
      */
     async getTasks(): Promise<Task[]> {
-        logInfo(`ApiClient. Getting all tasks`);
+        logInfo(`@ApiClient. Getting all tasks`);
         const response = await this.makeRequest('GET', '/api/tasks');
 
         if (response.success) {
-            return (ApiClient.toMap(response?.data).get("tasks") as []).map(taskData => ApiClient.toTask(taskData));
+            const tasks: [] = ApiClient.toMap(response?.data).get("tasks");
+            return tasks.filter(Boolean).map(taskData => ApiClient.toTask(taskData));
         } else {
-            throw new Error(`ApiClient. Failed to get tasks: ${response?.error}`);
+            throw new Error(`@ApiClient. Failed to get tasks: ${response?.error}`);
         }
     }
 
@@ -240,14 +241,14 @@ class ApiClient {
      * @returns Promise resolving to task data
      */
     async getTask(taskId: string): Promise<any> {
-        logInfo(`ApiClient. Getting task with ID: ${taskId}`);
+        logInfo(`@ApiClient. Getting task with ID: ${taskId}`);
         const encodedTaskId = encodeURIComponent(taskId);
         const response = await this.makeRequest('GET', `/api/tasks/${encodedTaskId}`);
 
         if (response.success) {
-            return ApiClient.toTask(response?.data);
+            return ApiClient.toTask(ApiClient.toMap(response?.data).get("task"));
         } else {
-            throw new Error(`ApiClient. Failed to get task ${taskId}: ${response?.error}`);
+            throw new Error(`@ApiClient. Failed to get task ${taskId}: ${response?.error}`);
         }
     }
 
@@ -273,13 +274,12 @@ class ApiClient {
      * @returns The Task object created from the provided data
      */
     private static toTask(data: any): Task {
-        const map: Map<string, any> = ApiClient.toMap(data)
         return {
-            id: map.get("id"),
-            agents: map.get("agents") || [],
-            links: map.get("links") || {},
-            progress: map.get("progress") || {},
-            status: map.get("status") || TaskStatuses.PENDING
+            id: data["id"],
+            agents: data["agents"] || [],
+            links: data["links"] || {},
+            progress: data["progress"] || {},
+            status: data["status"] || TaskStatuses.PENDING
         };
     }
 
@@ -319,38 +319,6 @@ function createApiClient(baseUrl: string): ApiClient {
     return new ApiClient(baseUrl);
 }
 
-// Example usage and helper functions
-async function exampleUsage() {
-    const client = createApiClient('https://api.example.com');
-
-    try {
-        // Get all agents
-        const agents = await client.getAgentNames();
-        console.log('All agents:', agents);
-
-        // Get specific agent
-        const agent = await client.getAgentConfig('agent-name');
-        console.log('Specific agent:', agent);
-
-        // Create a task
-        const newTaskId = await client.createTask({
-            tag: 'example-tag',
-            agents: ['agent1', 'agent2']
-        });
-        console.log('Created task:', newTaskId);
-
-        // Get all tasks
-        const tasks = await client.getTasks();
-        console.log('All tasks:', tasks);
-
-        // Get specific task
-        const task = await client.getTask('task-id-123');
-        console.log('Specific task:', task);
-    } catch (error) {
-        console.error('API Error:', error instanceof Error ? error.message : String(error));
-    }
-}
-
 // Export the main classes and functions
 export {
     ApiClient,
@@ -358,6 +326,39 @@ export {
     TaskConfig,
     ApiResponse
 };
+
+
+// Example usage and helper functions
+// async function exampleUsage() {
+//     const client = createApiClient('https://api.example.com');
+//
+//     try {
+//         // Get all agents
+//         const agents = await client.getAgentNames();
+//         console.log('All agents:', agents);
+//
+//         // Get specific agent
+//         const agent = await client.getAgentConfig('agent-name');
+//         console.log('Specific agent:', agent);
+//
+//         // Create a task
+//         const newTaskId = await client.createTask({
+//             tag: 'example-tag',
+//             agents: ['agent1', 'agent2']
+//         });
+//         console.log('Created task:', newTaskId);
+//
+//         // Get all tasks
+//         const tasks = await client.getTasks();
+//         console.log('All tasks:', tasks);
+//
+//         // Get specific task
+//         const task = await client.getTask('task-id-123');
+//         console.log('Specific task:', task);
+//     } catch (error) {
+//         console.error('API Error:', error instanceof Error ? error.message : String(error));
+//     }
+// }
 
 // Run example if this file is executed directly
 // if (require.main === module) {

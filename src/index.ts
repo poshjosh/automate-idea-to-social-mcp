@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
-  AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS
+  APP_PROFILES, APP_VERSION, AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS
 } from "./environment.js";
 import { clearLogs, getLogs, logError, logInfo, logThrown } from "./logger.js";
 import {
@@ -20,12 +20,15 @@ import {
   checkDockerStatus, stopAndRemoveContainer
 } from "./docker-utils.js";
 import { ApiClient, createApiClient } from "./api-client.js";
+import { PersistentStore } from "./persistent-store.js";
 
 const SERVER_NAME: string = "automate-idea-to-social-mcp";
-const SERVER_VERSION: string = "0.0.1"
+const SERVER_VERSION: string = APP_VERSION
 
-// In-memory task storage (in production, this could be a database)
-const taskConfigs: Map<string, TaskConfig> = new Map(); // TODO Bleed this from time to time?
+const taskConfigs: PersistentStore = new PersistentStore({
+    dir: 'storage.task-configs',
+    ttl: 30 * 60 * 1000 // milliseconds, time to live for each key
+});
 
 // Create an MCP server
 const server = new McpServer({
@@ -38,7 +41,7 @@ interface AppStatus {
   message: string;
 }
 
-async function setupApp(timeout: number = 30): Promise<AppStatus> {
+async function setupDownstreamServer(timeout: number = 30): Promise<AppStatus> {
   const dockerStatus: DockerStatus = await checkDockerStatus();
   let isError: boolean;
   let message;
@@ -63,76 +66,85 @@ async function getOrCreateApiClient(): Promise<ApiClient> {
     throw new Error(`Failed to run container for image: ${AIDEAS_IMAGE_NAME} on port: ${AIDEAS_PORT}`);
   }
 
-  const apiEndpoint = `http://localhost:${result.port}`;
+  const host = APP_PROFILES.toLowerCase().includes("docker") ? result.ip : "localhost";
+
+  const apiEndpoint = `http://${host}:${result.port}`;
 
   return createApiClient(apiEndpoint);
+}
+
+async function requireApiClientAndServerReady(timeoutSeconds: number = 30): Promise<ApiClient> {
+  const apiClient: ApiClient = await getOrCreateApiClient();
+  // TODO No need to call this every time, just once at startup and then maybe periodically?
+  if (await apiClient.isUp(timeoutSeconds)) {
+    return apiClient;
+  }
+  throw new Error(`Server is not up, even after waiting ${timeoutSeconds} seconds`);
 }
 
 // Helper functions
 async function getAvailableAgents(tag: string | null = null): Promise<string[]> {
   try {
-    logInfo(`Getting available agents for tag: ${tag}`);
+    logInfo(`@index. Getting available agents for tag: ${tag}`);
 
-    const apiClient: ApiClient = await getOrCreateApiClient();
+    const apiClient: ApiClient = await requireApiClientAndServerReady();
 
     return await apiClient.getAgentNames(tag)
 
   } catch (error) {
-    logThrown(`Error reading agent configs`, error);
+    logThrown(`@index. Error fetching agents`, error);
     return [];
   }
 }
 
 async function getAgentConfig(agentName: string): Promise<AgentConfig | null> {
   try {
-    logInfo(`Getting agent config for: ${agentName}`);
+    logInfo(`@index. Getting agent config for: ${agentName}`);
 
-    const apiClient: ApiClient = await getOrCreateApiClient();
+    const apiClient: ApiClient = await requireApiClientAndServerReady();
 
     return await apiClient.getAgentConfig(agentName);
 
   } catch (error) {
-    logThrown(`Error reading config for agent: ${agentName}`, error);
+    logThrown(`@index. Error reading config for agent: ${agentName}`, error);
     return null;
   }
 }
 
 async function getTask(taskId: string): Promise<Task | null> {
   try {
-    logInfo(`Getting task by ID: ${taskId}`);
+    logInfo(`@index. Getting task by ID: ${taskId}`);
 
-    const apiClient: ApiClient = await getOrCreateApiClient();
+    const apiClient: ApiClient = await requireApiClientAndServerReady();
 
     return await apiClient.getTask(taskId);
 
   } catch (error) {
-    taskConfigs.delete(taskId);
-    logThrown(`Error getting task by ID: ${taskId}`, error);
+    logThrown(`@index. Error getting task by ID: ${taskId}`, error);
     return null;
   }
 }
 
 async function runAutomationTask(config: TaskConfig): Promise<string | null> {
-  let tempRunConfigPath: string | null = null;
   try {
-    logInfo(`Preparing to run task with config: ${JSON.stringify(config)}`);
+    logInfo(`@index. Preparing to run task with config: ${JSON.stringify(config)}`);
 
     if (!config) {
-      logError(`Task config is required.`);
+      logError(`@index. Task config is required.`);
       return null;
     }
 
-    const apiClient: ApiClient = await getOrCreateApiClient();
+    const apiClient: ApiClient = await requireApiClientAndServerReady();
 
     // Create and run the automation task
     const taskId: string = await apiClient.createTask(config);
 
-    logInfo(`Task ID: ${taskId} successfully created`);
+    logInfo(`@index. Task ID: ${taskId} successfully created`);
 
     return taskId;
 
   } catch (error) {
-    logThrown(`Error running creating task with config: ${JSON.stringify(config)}`, error);
+    logThrown(`@index. Error running creating task with config: ${JSON.stringify(config)}`, error);
     return null;
   }
 }
@@ -148,12 +160,12 @@ function withLogs(message: string | null = null, error?: unknown): string {
 server.tool(
   "list_agents",
   {
-    filter_by_tag: z.string().optional().describe("Filter agents by tag (e.g., 'post', 'generate-video', 'test')"),
+    filter_by_tag: z.string().trim().optional().describe("Filter agents by tag (e.g., 'post', 'generate-video', 'test')"),
   },
   async ({ filter_by_tag }) => {
     try {
       clearLogs(); // Clear logs at the start of the tool execution
-      logInfo(`Listing agents with filter: ${filter_by_tag ?? 'none'}`);
+      logInfo(`@index. Listing agents with filter: ${filter_by_tag ?? 'none'}`);
 
       const agents = await getAvailableAgents(filter_by_tag);
 
@@ -187,12 +199,12 @@ server.tool(
 server.tool(
   "get_agent_config",
   {
-    agent_name: z.string().describe("Name of the agent to get configuration for"),
+    agent_name: z.string().trim().describe("Name of the agent to get configuration for"),
   },
   async ({ agent_name }) => {
     try {
       clearLogs(); // Clear logs at the start of the tool execution
-      logInfo(`Getting config for agent: ${agent_name}`);
+      logInfo(`@index. Getting config for agent: ${agent_name}`);
 
       const agentConfig = await getAgentConfig(agent_name)
       if (!agentConfig) {
@@ -233,18 +245,18 @@ server.tool(
 server.tool(
   "create_automation_task",
   {
-    agents: z.array(z.string()).describe("List of agent names to run"),
-    text_content: z.string().describe("The text content/idea to process"),
+    agents: z.array(z.string().trim()).describe("List of agent names to run"),
+    text_content: z.string().optional().describe("The text content/idea to process"),
     text_title: z.string().optional().describe("Title for the content"),
-    language_codes: z.string().default("en").describe("Language codes (e.g., 'en', 'en,es,fr')"),
-    image_file_landscape: z.string().optional().describe("Path to landscape image file"),
-    image_file_square: z.string().optional().describe("Path to square image file"),
-    share_cover_image: z.boolean().default(false).describe("Whether to share cover image"),
+    language_codes: z.string().trim().optional().describe("Language codes (e.g., 'en', 'en,es,fr')"),
+    image_file_landscape: z.string().trim().optional().describe("Path to landscape image file"),
+    image_file_square: z.string().trim().optional().describe("Path to square image file"),
+    share_cover_image: z.boolean().default(true).describe("Whether to share cover image"),
   },
   async ({ agents, text_content, text_title, language_codes, image_file_landscape, image_file_square, share_cover_image }) => {
     try {
       clearLogs(); // Clear logs at the start of the tool execution
-      logInfo(`Creating automation task for agents: ${agents}`);
+      logInfo(`@index. Creating automation task for agents: ${agents}`);
 
       // Validate agents exist
       const availableAgents = await getAvailableAgents();
@@ -334,12 +346,12 @@ server.tool(
 server.tool(
   "get_task_status",
   {
-    task_id: z.string().describe("ID of the task to check"),
+    task_id: z.string().trim().describe("ID of the task to check"),
   },
   async ({ task_id }) => {
     try {
       clearLogs(); // Clear logs at the start of the tool execution
-      logInfo(`Getting status for task ID: ${task_id}`);
+      logInfo(`@index. Getting status for task ID: ${task_id}`);
 
       const taskConfig = taskConfigs.get(task_id);
       if (!taskConfig) {
@@ -356,7 +368,6 @@ server.tool(
 
       const task: Task | null = await getTask(task_id);
       if (!task) {
-        taskConfigs.delete(task_id);
         return {
           content: [
             {
@@ -377,7 +388,6 @@ server.tool(
         ],
       };
     } catch (error) {
-      taskConfigs.delete(task_id);
       return {
         content: [
           {
@@ -395,28 +405,21 @@ server.tool(
 server.tool(
   "list_tasks",
   {
-    status_filter: z.string().refine((state): state is TaskStatus => {
-        return Object.values(TaskStatuses).includes(state as TaskStatus);
+    filter_by_status: z.string().trim().optional().refine((state): state is TaskStatus => {
+        return !state || Object.values(TaskStatuses).includes(state as TaskStatus);
     }),
   },
-  async ({ status_filter }) => {
+  async ({ filter_by_status }) => {
     try {
       clearLogs(); // Clear logs at the start of the tool execution
-      logInfo(`Listing tasks with status filter: ${status_filter ?? 'none'}`);
+      logInfo(`@index. Listing tasks with status filter: ${filter_by_status ?? 'none'}`);
 
-      const apiClient: ApiClient = await getOrCreateApiClient();
+      const apiClient: ApiClient = await requireApiClientAndServerReady();
 
       let taskList: Task[] = await apiClient.getTasks();
 
-      // Delete stale tasks
-      for (const taskId of taskConfigs.keys()) {
-        if (!taskList.find(t => t.id === taskId)) {
-          taskConfigs.delete(taskId);
-        }
-      }
-
-      if (status_filter) {
-        taskList = taskList.filter(task => task.status === status_filter);
+      if (filter_by_status) {
+        taskList = taskList.filter(task => task.status === filter_by_status);
       }
 
       return {
@@ -426,7 +429,7 @@ server.tool(
             text: JSON.stringify({
               tasks: taskList,
               total: taskList.length,
-              filter_applied: status_filter ?? null
+              filter_applied: filter_by_status ?? null
             }, null, 2),
           },
         ],
@@ -436,7 +439,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: withLogs(`Error listing tasks with status: ${status_filter}`, error),
+            text: withLogs(`Error listing tasks with status: ${filter_by_status}`, error),
           },
         ],
         isError: true,
@@ -452,7 +455,7 @@ server.tool(
   async () => {
     try {
       clearLogs(); // Clear logs at the start of the tool execution
-      logInfo(`Validating automation setup`);
+      logInfo(`@index. Validating automation setup`);
 
       const appStatus: DockerStatus = await checkDockerStatus();
       return {
@@ -484,7 +487,7 @@ server.tool(
     { },
     async ({ }) => {
       try {
-        logInfo("Fetching logs");
+        logInfo("@index. Fetching logs");
 
         const logs = getLogs();
 
@@ -514,7 +517,7 @@ server.tool(
 );
 
 process.on("SIGTERM", async () => {
-    logInfo(`Received SIGTERM, shutting down...`);
+    logInfo(`@index. Received SIGTERM, shutting down...`);
     try {
       await stopAndRemoveContainer(AIDEAS_IMAGE_NAME);
     } finally {
@@ -523,7 +526,7 @@ process.on("SIGTERM", async () => {
 });
 
 process.on("SIGINT", async () => {
-  logInfo(`Received SIGINT, shutting down...`);
+  logInfo(`@index. Received SIGINT, shutting down...`);
   try {
     await stopAndRemoveContainer(AIDEAS_IMAGE_NAME);
   } finally {
@@ -532,7 +535,7 @@ process.on("SIGINT", async () => {
 });
 
 process.on("exit", async code => {
-  logInfo(`App exited with code: ${code}, shutting down...`);
+  logInfo(`@index. App exited with code: ${code}, shutting down...`);
   try {
     await stopAndRemoveContainer(AIDEAS_IMAGE_NAME);
   } finally {
@@ -543,11 +546,11 @@ process.on("exit", async code => {
 // Start receiving messages on stdin and sending messages on stdout
 const transport = new StdioServerTransport();
 await server.connect(transport);
-logInfo(`MCP server: ${SERVER_NAME} v${SERVER_VERSION} is running on stdio\nPress Ctrl+C to exit`);
-// const appStatus: AppStatus = await setupApp(30);
+logInfo(`@index. MCP server: ${SERVER_NAME} v${SERVER_VERSION} is running on stdio.\nPress Ctrl+C to exit`);
+// const appStatus: AppStatus = await setupDownstreamServer(30);
 // if (appStatus.error) {
-//   logError(appStatus.message);
+//   logError(`@index. Error setting up downstream server. ${appStatus.message}`);
 //   process.exit(1);
 // } else {
-//   logInfo(`MCP server: ${SERVER_NAME} v${SERVER_VERSION} is running on stdio\nPress Ctrl+C to exit`);
+//   logInfo("@index. !! READY !! (Press Ctrl+C to exit)");
 // }
