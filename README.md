@@ -34,7 +34,7 @@ and exposes its functionality through a standardized MCP interface.
 }
 ```
 
-- Depending on the agents, you may need to provide additional [environment variables]((https://github.com/poshjosh/automate-idea-to-social/blob/main/docs/environment.md)). 
+- Depending on the agents, you may need to provide additional [environment variables](./docs/environment.md). 
 For example for instagram we add the following to the `args` section above:
 
 ```json
@@ -50,7 +50,7 @@ For example for instagram we add the following to the `args` section above:
 }
 ```
 
-See the full list of [environment variables]((https://github.com/poshjosh/automate-idea-to-social/blob/main/docs/environment.md)).
+See the full list of [environment variables](./docs/environment.md).
 
 ### VS Code
 
