@@ -26,8 +26,8 @@ const SERVER_NAME: string = "automate-idea-to-social-mcp";
 const SERVER_VERSION: string = APP_VERSION
 
 const taskConfigs: PersistentStore = new PersistentStore({
-    dir: 'storage.task-configs',
-    ttl: 30 * 60 * 1000 // milliseconds, time to live for each key
+    dir: 'task-configs.storage',
+    ttl: 12 * 60 * 60 * 1000 // milliseconds, time to live for each key
 });
 
 // Create an MCP server
