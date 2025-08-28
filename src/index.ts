@@ -3,7 +3,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
-  APP_PROFILES, APP_VERSION, AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS
+  APP_PROFILES, APP_VERSION, AIDEAS_IMAGE_NAME, AIDEAS_PORT, AIDEAS_DOCKER_RUN_COMMAND_EXTRAS,
+  TASK_CACHE_TTL_SECONDS
 } from "./environment.js";
 import { clearLogs, getLogs, logError, logInfo, logThrown } from "./logger.js";
 import {
@@ -27,7 +28,7 @@ const SERVER_VERSION: string = APP_VERSION
 
 const taskConfigs: PersistentStore = new PersistentStore({
     dir: 'task-configs.storage',
-    ttl: 12 * 60 * 60 * 1000 // milliseconds, time to live for each key
+    ttl: TASK_CACHE_TTL_SECONDS * 1000
 });
 
 // Create an MCP server

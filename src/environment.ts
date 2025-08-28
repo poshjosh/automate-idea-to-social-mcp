@@ -4,6 +4,7 @@ import { logInfo } from "./logger.js";
 
 export const APP_VERSION = process.env["APP_VERSION"] ?? "0.0.1";
 export const APP_PROFILES = process.env["APP_PROFILES"] ?? "default";
+export const TASK_CACHE_TTL_SECONDS = parseInt(process.env["TASK_CACHE_TTL_SECONDS"] ?? "86400");
 
 ///////////////////////////////// NOTE //////////////////////////////////////
 // aideas related environment variables
