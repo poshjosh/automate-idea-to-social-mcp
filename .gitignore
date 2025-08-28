@@ -1,5 +1,6 @@
 # custom
 git-ignore/
+*.storage
 
 .DS_Store
 build/

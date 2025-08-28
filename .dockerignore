@@ -1,3 +1,4 @@
+*.storage
 .DS_Store
 .git/
 .idea/
