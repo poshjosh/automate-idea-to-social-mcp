@@ -1,4 +1,5 @@
 const { MCPClient } = require('./mcp-client.cjs');
+const { TaskStatuses } = require("../src/api-type-definitions.ts");
 
 function getFieldValueFromToolCallResponse(toolName, response, fieldName) {
   const responseText = response?.content[0]?.text;
@@ -59,10 +60,11 @@ async function test() {
       "list_agents", listAgentsResponse, "agents");
     console.log('Agents:', agents);
 
+    const agent_name = agents[0];
     const agentConfigResponse = await client.callTool("get_agent_config", {
-      agent_name: agents[0]
+      agent_name
     })
-    console.log('Agent config response:\n', agentConfigResponse);
+    console.log(`${agent_name} agent config response:\n`, agentConfigResponse);
 
     // List resources (optional)
     try {
@@ -97,8 +99,7 @@ async function test() {
     }
 
     const listTasksResponse = await client.callTool("list_tasks", {
-      agent_name: agents[0],
-      filter_by_status: "RUNNING"
+      filter_by_status: TaskStatuses.RUNNING
     })
     console.log('List tasks response:\n', listTasksResponse);
 
